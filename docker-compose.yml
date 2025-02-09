@@ -1,0 +1,77 @@
+services:
+  app:
+    container_name: multidb_tenancy
+    build:
+      context: .
+      args:
+        user: ${USER:-wallace}
+        uid: ${UID:-1000}
+      dockerfile: Dockerfile
+    working_dir: /var/www/
+    volumes:
+      - ./:/var/www/
+    restart: unless-stopped
+    depends_on:
+      - queue
+      - mysql
+    networks:
+      - development
+
+  queue:
+    container_name: multidb_tenancy_queue
+    build:
+      context: .
+      args:
+        user: ${USER:-wallace}
+        uid: ${UID:-1000}
+      dockerfile: Dockerfile
+    restart: always
+    command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3"]
+    volumes:
+      - ./:/var/www
+    depends_on:
+      - mysql
+    networks:
+      - development
+
+  nginx:
+    container_name: multidb_tenancy_nginx
+    image: nginx:alpine
+    restart: always
+    ports:
+      - 80:80
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/:/etc/nginx/conf.d/
+    networks:
+      - development
+
+  mysql:
+    container_name: multidb_tenancy_mysql
+    image: mysql:latest
+    restart: always
+    ports:
+      - 3307:3306
+    volumes:
+      - mysql-data:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      LANG: C.UTF-8
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - development
+
+volumes:
+  mysql-data:
+
+networks:
+  development:
+    external: true  # Usando a rede externa que já foi criada
